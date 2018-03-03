@@ -24,3 +24,10 @@ if(Test-Path $ConfigLocation){
     @("Coins`nBTC`nETH`nLTC") | Out-File $ConfigLocation -Force
     $Config = Import-Csv $ConfigLocation
 }
+
+#Load most recent coin data
+$Coins = @{}
+ForEach($Coin in $Config.Coins){
+    $Coins[$Coin] = Get-Coin $Coin
+}
+
