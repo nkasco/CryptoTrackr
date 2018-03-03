@@ -5,10 +5,11 @@
 ################################################
 
 $ErrorActionPreference = "SilentlyContinue"
+$ScriptPath = Split-Path $MyInvocation.MyCommand.Path
 
 #Install CoinMarketCap Module - Credit: https://github.com/lazywinadmin/CoinMarketCap
 if(!(Get-Module -Name CoinMarketCap)){
-    Install-Module -ModulePath "CoinMarketCap\CoinMarketCap.psm1"
+    Install-Module -ModulePath "$ScriptPath\CoinMarketCap\CoinMarketCap.psm1"
 }
 
 #Load config from AppData
@@ -23,3 +24,4 @@ if(Test-Path $ConfigLocation){
     @("Coins`nBTC`nETH`nLTC") | Out-File $ConfigLocation -Force
     $Config = Import-Csv $ConfigLocation
 }
+
