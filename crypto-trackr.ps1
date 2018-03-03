@@ -24,4 +24,3 @@ if(Test-Path $ConfigLocation){
     @("Coins`nBTC`nETH`nLTC") | Out-File $ConfigLocation -Force
     $Config = Import-Csv $ConfigLocation
 }
-
