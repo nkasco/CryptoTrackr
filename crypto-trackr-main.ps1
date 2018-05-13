@@ -30,11 +30,12 @@ if(Test-Path $ConfigLocation){
     if(!(Test-Path(Split-Path $ConfigLocation))){
         New-Item (Split-Path $ConfigLocation) -ItemType Directory -Force | Out-Null
     }
+    
     [PSCustomObject]@{
         Symbols = "BTC"
         Coins = 1
     } | Export-Csv $ConfigLocation -NoTypeInformation
-    #@("Coins`nBTC(1)`nETH(1)`nLTC(1)") | Out-File $ConfigLocation -Force
+
     $Config = Import-Csv $ConfigLocation
 }
 
