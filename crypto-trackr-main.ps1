@@ -5,22 +5,24 @@
 ################################################
 
 $ErrorActionPreference = "SilentlyContinue"
-#$ScriptPath = Split-Path $MyInvocation.MyCommand.Path
-$ScriptPath = "/Users/nate/Documents/Scripts/Scripty Scripts/Crypto Tracker/CryptoTrackr"
+$ScriptPath = Split-Path $MyInvocation.MyCommand.Path
 
 #Install CoinMarketCap Module - Credit: https://github.com/lazywinadmin/CoinMarketCap
 if(!(Get-Module -Name CoinMarketCap)){
     try{
-        Install-Module -ModulePath "$ScriptPath\CoinMarketCap\CoinMarketCap.psm1"
+        Install-Module -ModulePath "$ScriptPath\CoinMarketCap.psm1"
     } catch {
         Write-Error "Unable to load API module"
         Exit
     }
 }
 
+Function ConvertFrom-Unix($UnixDate) {
+    [timezone]::CurrentTimeZone.ToLocalTime(([datetime]'1/1/1970').AddSeconds($UnixDate))
+}
+
 #Load config data or create initial data
-$ConfigLocation = "/Users/nate/Documents/Scripts/Scripty Scripts/Crypto Tracker/Config.csv"
-#$ConfigLocation = "$env:LOCALAPPDATA\CryptoTrackr\config.csv"
+$ConfigLocation = "$env:LOCALAPPDATA\CryptoTrackr\config.csv"
 if(Test-Path $ConfigLocation){
     $Config = Import-Csv $ConfigLocation
 } else {
@@ -28,13 +30,21 @@ if(Test-Path $ConfigLocation){
     if(!(Test-Path(Split-Path $ConfigLocation))){
         New-Item (Split-Path $ConfigLocation) -ItemType Directory -Force | Out-Null
     }
-    @("Coins`nBTC(1)`nETH(1)`nLTC(1)") | Out-File $ConfigLocation -Force
+    [PSCustomObject]@{
+        Symbols = "BTC"
+        Coins = 1
+    } | Export-Csv $ConfigLocation -NoTypeInformation
+    #@("Coins`nBTC(1)`nETH(1)`nLTC(1)") | Out-File $ConfigLocation -Force
     $Config = Import-Csv $ConfigLocation
 }
 
 $ActiveConfig = @()
-foreach($Coin in $Config.Coins){
-    $ActiveConfig += $Coin
+$BuildConfig = [ordered]@{}
+foreach($Coin in $Config){
+    $BuildConfig.Symbols = $Coin.Symbols
+    $BuildConfig.Coins = $Coin.Coins
+
+    $ActiveConfig += [PSCustomObject]$BuildConfig
 }
 
 #Initialize Menu System
@@ -66,24 +76,24 @@ $Default = 0
 do{
     #Load most recent coin data
     $CoinData = @{}
-    ForEach($Coin in $ActiveConfig){
-        $CoinData[$Coin -replace "\(.*"] = Get-Coin $($Coin -replace "\(.*")
-    }
-
-    $ActiveConfig = @()
-    foreach($Coin in $Config.Coins){
-        $ActiveConfig += $Coin
+    ForEach($Coin in $ActiveConfig.Symbols){
+        $CoinData[$Coin] = Get-Coin $Coin
     }
 
     $TotalValue = 0
 
+    Write-Host "Coin Data:`n"
     #Display latest coin values, portfolio total value, and latest update time
     foreach($CoinValue in $CoinData.Values){
-        $Shares = $ActiveConfig -match $CoinValue.symbol -replace "$($CoinValue.symbol)" -replace "\(" -replace "\)"
+        $CurrentCoin = $CoinValue.symbol
+        $Shares = ($ActiveConfig | Where-Object Symbols -eq $CurrentCoin).Coins
         $CurrentValue = $CoinValue.price_usd
+        $LastUpdated = ConvertFrom-Unix $CoinValue.last_updated
+
         $TotalCoinValue = [Math]::Round([decimal]::Parse($CurrentValue) * [decimal]::Parse($Shares),2)
         $TotalValue += [decimal]::Parse($TotalCoinValue)
-        Write-Host "$($CoinValue.symbol) - `$$CurrentValue - Coins: $Shares - Total Value (USD): $TotalCoinValue - Last Updated: $($CoinValue.last_updated)"
+
+        Write-Host "$CurrentCoin - `$$CurrentValue - Coins: $Shares - Total Value (USD): `$$TotalCoinValue - Last Updated: $LastUpdated"
     }
 
     Write-Host "`nTotal portfolio: `$$TotalValue`n"
@@ -118,7 +128,12 @@ do{
             if($CoinCheck){
                 if(![bool]($ActiveConfig -match $AddCoin)){
                     $Shares = Read-Host "How many coins to be added"
-                    $ActiveConfig += "$($AddCoin.ToUpper())`($Shares`)"
+                    $BuildCoin = [ordered]@{
+                        Symbols = $AddCoin
+                        Coins = $Shares
+                    }
+
+                    $ActiveConfig += [PSCustomObject]$BuildCoin
                 } else {
                     Write-Host -ForegroundColor Red "Error: Coin already added."
                     Start-Sleep -Seconds 2
@@ -141,19 +156,30 @@ do{
                     $Amount = Read-Host "How many"
                 }until($Amount -ne "")
 
-                $CurrentCoins = $ActiveConfig -match $ModifyCoin -replace "$ModifyCoin" -replace "\(" -replace "\)"
+                $CurrentCoins = ($ActiveConfig | Where-Object Symbols -eq $ModifyCoin).Coins
 
                 if($Action.ToUpper() -eq "A"){
                     #Add coins
                     $ActiveConfig = $ActiveConfig -notmatch $ModifyCoin
                     $NewCoins = [decimal]::Parse($CurrentCoins) + [decimal]::Parse($Amount)
-                    $ActiveConfig += "$($AddCoin.ToUpper())`($NewCoins`)"
+
+                    $BuildCoin = [ordered]@{
+                        Symbols = $ModifyCoin
+                        Coins = $NewCoins
+                    }
+
+                    $ActiveConfig += [PSCustomObject]$BuildCoin
                 } else {
                     #Remove coins
                     $ActiveConfig = $ActiveConfig -notmatch $ModifyCoin
                     $NewCoins = [decimal]::Parse($CurrentCoins) - [decimal]::Parse($Amount)
                     if($NewCoins -ne 0){
-                        $ActiveConfig += "$($AddCoin.ToUpper())`($NewCoins`)"
+                        $BuildCoin = [ordered]@{
+                            Symbols = $ModifyCoin
+                            Coins = $NewCoins
+                        }
+    
+                        $ActiveConfig += [PSCustomObject]$BuildCoin
                     }
                 }
             } else {
@@ -165,7 +191,7 @@ do{
         4{
             #Remove coin from config
             $RemoveCoin = Read-Host "Enter symbol of coin to remove from config"
-            if([bool]($ActiveConfig -match $RemoveCoin)){
+            if([bool]($ActiveConfig.Symbols -match $RemoveCoin)){
                 $ActiveConfig = $ActiveConfig -notmatch $RemoveCoin
             } else {
                 Write-Host -ForegroundColor Red "Error: Coin not loaded into current config."
@@ -176,15 +202,7 @@ do{
 }until($Command -eq 5)
 
 try{
-    $OutputConfig = @()
-    foreach($Coin in $ActiveConfig){
-        $BuildOutput = New-Object System.Object
-        $BuildOutput | Add-Member -MemberType NoteProperty -Value $Coin -Name "Coins"
-
-        $OutputConfig += $BuildOutput
-    }
-
-    $OutputConfig | Export-Csv -Path $ConfigLocation -Force
+    $ActiveConfig | Export-Csv -Path $ConfigLocation -NoTypeInformation -Force
 } catch {
     Write-Host -ForegroundColor Red "Error: Unable to save changes to config"
 }
