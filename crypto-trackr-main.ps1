@@ -28,7 +28,7 @@ if(Test-Path $ConfigLocation){
     if(!(Test-Path(Split-Path $ConfigLocation))){
         New-Item (Split-Path $ConfigLocation) -ItemType Directory -Force | Out-Null
     }
-    @("Coins`nBTC`nETH`nLTC") | Out-File $ConfigLocation -Force
+    @("Coins`nBTC(1)`nETH(1)`nLTC(1)") | Out-File $ConfigLocation -Force
     $Config = Import-Csv $ConfigLocation
 }
 
@@ -50,13 +50,16 @@ $c = New-Object System.Management.Automation.Host.ChoiceDescription "&Check coin
 $a = New-Object System.Management.Automation.Host.ChoiceDescription "&Add coin", `
     "Adds a coin to your config."
 
+$m = New-Object System.Management.Automation.Host.ChoiceDescription "&Modify coin", `
+    "Add/remove shares for a coin in your config."
+
 $d = New-Object System.Management.Automation.Host.ChoiceDescription "&Delete coin", `
     "Removes a coin from your config."
 
 $e = New-Object System.Management.Automation.Host.ChoiceDescription "&Exit", `
     "Exits Crypto Trackr."
 
-$Options = [System.Management.Automation.Host.ChoiceDescription[]]($r,$c, $a, $d, $e)
+$Options = [System.Management.Automation.Host.ChoiceDescription[]]($r,$c, $a, $m, $d, $e)
 
 $Default = 0
 
@@ -64,12 +67,15 @@ do{
     #Load most recent coin data
     $CoinData = @{}
     ForEach($Coin in $ActiveConfig){
-        $CoinData[$Coin] = Get-Coin $Coin
+        $CoinData[$Coin -replace "\(.*"] = Get-Coin $($Coin -replace "\(.*")
     }
 
     #Display latest coin values, portfolio total value, and latest update time
     foreach($CoinValue in $CoinData.Values){
-        Write-Host "$($CoinValue.symbol) - `$$($CoinValue.price_usd) - Last Updated: $($CoinValue.last_updated)"
+        $Shares = $ActiveConfig -match $CoinValue.symbol -replace "$($CoinValue.symbol)" -replace "\(" -replace "\)"
+        $Value = $CoinValue.price_usd
+        $TotalCoinValue = $Value * $Shares
+        Write-Host "$($CoinValue.symbol) - `$$Value - Coins: $Shares - Total Value: $TotalCoinValue - Last Updated: $($CoinValue.last_updated)"
     }
 
     $TotalValue = 0
@@ -107,7 +113,8 @@ do{
 
             if($CoinCheck){
                 if(![bool]($ActiveConfig -match $AddCoin)){
-                    $ActiveConfig += $AddCoin
+                    $Shares = Read-Host "How many coins to be added"
+                    $ActiveConfig += "$($AddCoin.ToUpper())`($Shares`)"
                 } else {
                     Write-Host -ForegroundColor Red "Error: Coin already added."
                     Start-Sleep -Seconds 2
@@ -119,6 +126,19 @@ do{
         }
 
         3{
+            #Modify coin from config
+            $ModifyCoin = Read-Host "Enter symbol of coin to remove from config"
+            if([bool]($ActiveConfig -match $ModifyCoin)){
+                do{
+                    $Action = Read-Host "Add or remove coins? (A/R)"
+                }while(($Action.ToUpper() -ne "A") -and ($Action.ToUpper() -ne "R"))
+            } else {
+                Write-Host -ForegroundColor Red "Error: Coin not loaded into current config."
+                Start-Sleep -Seconds 2
+            }
+        }
+
+        4{
             #Remove coin from config
             $RemoveCoin = Read-Host "Enter symbol of coin to remove from config"
             if([bool]($ActiveConfig -match $RemoveCoin)){
@@ -129,7 +149,7 @@ do{
             }
         }
     }
-}until($Command -eq 4)
+}until($Command -eq 5)
 
 try{
     $OutputConfig = @()
