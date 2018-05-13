@@ -70,15 +70,18 @@ do{
         $CoinData[$Coin -replace "\(.*"] = Get-Coin $($Coin -replace "\(.*")
     }
 
+    $TotalValue = 0
+
     #Display latest coin values, portfolio total value, and latest update time
     foreach($CoinValue in $CoinData.Values){
         $Shares = $ActiveConfig -match $CoinValue.symbol -replace "$($CoinValue.symbol)" -replace "\(" -replace "\)"
-        $Value = $CoinValue.price_usd
-        $TotalCoinValue = $Value * $Shares
-        Write-Host "$($CoinValue.symbol) - `$$Value - Coins: $Shares - Total Value: $TotalCoinValue - Last Updated: $($CoinValue.last_updated)"
+        $CurrentValue = $CoinValue.price_usd
+        $TotalCoinValue = $CurrentValue * $Shares
+        $TotalValue += $TotalCoinValue
+        Write-Host "$($CoinValue.symbol) - `$$CurrentValue - Coins: $Shares - Total Value: $TotalCoinValue - Last Updated: $($CoinValue.last_updated)"
     }
 
-    $TotalValue = 0
+
     foreach($CoinValue in $CoinData.Values){
         $TotalValue += $CoinValue.price_usd
     }
