@@ -70,21 +70,22 @@ do{
         $CoinData[$Coin -replace "\(.*"] = Get-Coin $($Coin -replace "\(.*")
     }
 
+    $ActiveConfig = @()
+    foreach($Coin in $Config.Coins){
+        $ActiveConfig += $Coin
+    }
+
     $TotalValue = 0
 
     #Display latest coin values, portfolio total value, and latest update time
     foreach($CoinValue in $CoinData.Values){
         $Shares = $ActiveConfig -match $CoinValue.symbol -replace "$($CoinValue.symbol)" -replace "\(" -replace "\)"
         $CurrentValue = $CoinValue.price_usd
-        $TotalCoinValue = $CurrentValue * $Shares
-        $TotalValue += $TotalCoinValue
-        Write-Host "$($CoinValue.symbol) - `$$CurrentValue - Coins: $Shares - Total Value: $TotalCoinValue - Last Updated: $($CoinValue.last_updated)"
+        $TotalCoinValue = [Math]::Round([decimal]::Parse($CurrentValue) * [decimal]::Parse($Shares),2)
+        $TotalValue += [decimal]::Parse($TotalCoinValue)
+        Write-Host "$($CoinValue.symbol) - `$$CurrentValue - Coins: $Shares - Total Value (USD): $TotalCoinValue - Last Updated: $($CoinValue.last_updated)"
     }
 
-
-    foreach($CoinValue in $CoinData.Values){
-        $TotalValue += $CoinValue.price_usd
-    }
     Write-Host "`nTotal portfolio: `$$TotalValue`n"
 
     $Command = $Host.ui.PromptForChoice($Title, $Message, $Options, $Default)
@@ -135,6 +136,26 @@ do{
                 do{
                     $Action = Read-Host "Add or remove coins? (A/R)"
                 }while(($Action.ToUpper() -ne "A") -and ($Action.ToUpper() -ne "R"))
+
+                do{
+                    $Amount = Read-Host "How many"
+                }until($Amount -ne "")
+
+                $CurrentCoins = $ActiveConfig -match $ModifyCoin -replace "$ModifyCoin" -replace "\(" -replace "\)"
+
+                if($Action.ToUpper() -eq "A"){
+                    #Add coins
+                    $ActiveConfig = $ActiveConfig -notmatch $ModifyCoin
+                    $NewCoins = [decimal]::Parse($CurrentCoins) + [decimal]::Parse($Amount)
+                    $ActiveConfig += "$($AddCoin.ToUpper())`($NewCoins`)"
+                } else {
+                    #Remove coins
+                    $ActiveConfig = $ActiveConfig -notmatch $ModifyCoin
+                    $NewCoins = [decimal]::Parse($CurrentCoins) - [decimal]::Parse($Amount)
+                    if($NewCoins -ne 0){
+                        $ActiveConfig += "$($AddCoin.ToUpper())`($NewCoins`)"
+                    }
+                }
             } else {
                 Write-Host -ForegroundColor Red "Error: Coin not loaded into current config."
                 Start-Sleep -Seconds 2
