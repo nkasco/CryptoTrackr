@@ -41,7 +41,7 @@ foreach($Coin in $Config.Coins){
 $Title = "Crypto Trackr"
 $Message = "Please enter a command:"
 
-$re = New-Object System.Management.Automation.Host.ChoiceDescription "&Refresh data", `
+$r = New-Object System.Management.Automation.Host.ChoiceDescription "&Refresh data", `
     "Refreshes coin data."
 
 $c = New-Object System.Management.Automation.Host.ChoiceDescription "&Check coin", `
@@ -50,13 +50,13 @@ $c = New-Object System.Management.Automation.Host.ChoiceDescription "&Check coin
 $a = New-Object System.Management.Automation.Host.ChoiceDescription "&Add coin", `
     "Adds a coin to your config."
 
-$r = New-Object System.Management.Automation.Host.ChoiceDescription "&Remove coin", `
+$d = New-Object System.Management.Automation.Host.ChoiceDescription "&Delete coin", `
     "Removes a coin from your config."
 
 $e = New-Object System.Management.Automation.Host.ChoiceDescription "&Exit", `
     "Exits Crypto Trackr."
 
-$Options = [System.Management.Automation.Host.ChoiceDescription[]]($re,$c, $a, $r, $e)
+$Options = [System.Management.Automation.Host.ChoiceDescription[]]($r,$c, $a, $d, $e)
 
 $Default = 0
 
@@ -106,27 +106,41 @@ do{
             $CoinCheck = Get-Coin -CoinId $AddCoin
 
             if($CoinCheck){
-                $ActiveConfig += $AddCoin
+                if(![bool]($ActiveConfig -match $AddCoin)){
+                    $ActiveConfig += $AddCoin
+                } else {
+                    Write-Host -ForegroundColor Red "Error: Coin already added."
+                    Start-Sleep -Seconds 2
+                }
             } else {
                 Write-Host -ForegroundColor Red "Error: Coin ($AddCoin) not found, do you have the correct symbol?"
+                Start-Sleep -Seconds 2
             }
         }
 
         3{
             #Remove coin from config
             $RemoveCoin = Read-Host "Enter symbol of coin to remove from config"
-            if($ActiveConfig -match $RemoveCoin){
-                $ActiveConfig -= $RemoveCoin
+            if([bool]($ActiveConfig -match $RemoveCoin)){
+                $ActiveConfig = $ActiveConfig -notmatch $RemoveCoin
             } else {
                 Write-Host -ForegroundColor Red "Error: Coin not loaded into current config."
+                Start-Sleep -Seconds 2
             }
         }
     }
 }until($Command -eq 4)
 
-#Export your config
 try{
-    $ActiveConfig | Export-Csv -Path $ConfigLocation -Force
+    $OutputConfig = @()
+    foreach($Coin in $ActiveConfig){
+        $BuildOutput = New-Object System.Object
+        $BuildOutput | Add-Member -MemberType NoteProperty -Value $Coin -Name "Coins"
+
+        $OutputConfig += $BuildOutput
+    }
+
+    $OutputConfig | Export-Csv -Path $ConfigLocation -Force
 } catch {
     Write-Host -ForegroundColor Red "Error: Unable to save changes to config"
 }
