@@ -102,12 +102,31 @@ do{
 
         2{
             #Add coin to config
+            $AddCoin = Read-Host "Enter symbol of coin to add to config"
+            $CoinCheck = Get-Coin -CoinId $AddCoin
 
+            if($CoinCheck){
+                $ActiveConfig += $AddCoin
+            } else {
+                Write-Host -ForegroundColor Red "Error: Coin ($AddCoin) not found, do you have the correct symbol?"
+            }
         }
 
         3{
             #Remove coin from config
-
+            $RemoveCoin = Read-Host "Enter symbol of coin to remove from config"
+            if($ActiveConfig -match $RemoveCoin){
+                $ActiveConfig -= $RemoveCoin
+            } else {
+                Write-Host -ForegroundColor Red "Error: Coin not loaded into current config."
+            }
         }
     }
 }until($Command -eq 4)
+
+#Export your config
+try{
+    $ActiveConfig | Export-Csv -Path $ConfigLocation -Force
+} catch {
+    Write-Host -ForegroundColor Red "Error: Unable to save changes to config"
+}
